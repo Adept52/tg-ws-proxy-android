@@ -59,7 +59,35 @@ jobs:
           find app/build/outputs/apk -name '*.apk' -exec cp {} out/ \;
           ls -lh out/
 
+      - name: Sign APKs
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+        run: |
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          APKSIGNER=$(find "$SDK/build-tools" -name apksigner -type f | head -1)
+          echo "apksigner: $APKSIGNER"
+          mkdir -p sign
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > sign/tgws.jks
+            echo "ключ подписи: из секрета репозитория"
+          else
+            keytool -genkeypair -keystore sign/tgws.jks -alias tgws -keyalg RSA -keysize 2048 \
+              -validity 10000 -storepass tgws-release -keypass tgws-release \
+              -dname "CN=tgws-proxy, O=Sititek, C=RU" > /dev/null
+            base64 -w0 sign/tgws.jks > sign/tgws-keystore.b64
+            echo "ключ подписи: сгенерирован впервые (сохрани секрет из артефакта)"
+          fi
+          for f in out/*-unsigned.apk; do
+            o="out/$(basename "${f%-unsigned.apk}")-signed.apk"
+            "$APKSIGNER" sign --ks sign/tgws.jks --ks-pass pass:tgws-release \
+              --key-pass pass:tgws-release --ks-key-alias tgws --out "$o" "$f"
+            "$APKSIGNER" verify --print-certs "$o" | head -2
+          done
+          ls -lh out/ out/sign 2>/dev/null || true
+
       - uses: actions/upload-artifact@v4
         with:
           name: tgws-apk
-          path: out/*.apk
+          path: |
+            out/*-signed.apk
+            sign/tgws-keystore.b64
