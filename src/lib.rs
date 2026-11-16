@@ -82,10 +82,15 @@ pub unsafe extern "C" fn StartProxy(
     init_logging(is_verbose);
     cfproxy::clear_cfproxy_429_cooldowns();
 
-    if secret_str.len() == 32 {
-        if hex::decode(&secret_str).is_ok() {
-            *PROXY_SECRET.write() = secret_str.clone();
-        }
+    if secret_str.len() == 32 && hex::decode(&secret_str).is_ok() {
+        *PROXY_SECRET.write() = secret_str.clone();
+        linfo!("  Secret fp:     {}", secret_fingerprint(&secret_str));
+    } else {
+        // Ключ не принят: все входящие подключения будут получать bad handshake.
+        lwarn!(
+            "  Secret ОТКЛОНЁН (нужно 32 hex, получено {} симв.) — прокси не примет ни одного клиента",
+            secret_str.len()
+        );
     }
 
     cfproxy::init_cfproxy_domains();

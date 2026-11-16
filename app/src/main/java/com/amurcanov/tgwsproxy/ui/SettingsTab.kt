@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.amurcanov.tgwsproxy.ProxyController
 import com.amurcanov.tgwsproxy.ProxyService
 import com.amurcanov.tgwsproxy.SettingsStore
 import kotlinx.coroutines.Job
@@ -88,6 +89,14 @@ private fun FieldActions(
             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
         ) { Text("✕ очистить", style = MaterialTheme.typography.labelSmall) }
     }
+}
+
+// Отпечаток ключа — тот же, что движок пишет в лог (SHA-256, первые 3 байта).
+private fun secretFingerprint(secret: String): String {
+    val s = secret.trim()
+    if (s.isEmpty()) return "—"
+    val digest = java.security.MessageDigest.getInstance("SHA-256").digest(s.toByteArray())
+    return digest.take(3).joinToString("") { "%02X".format(it) }
 }
 
 // Встроенный список CF-доменов (подсказка в поле). Пустое поле = использовать его же.
@@ -163,6 +172,16 @@ fun SettingsTab(settingsStore: SettingsStore) {
     var customCfDomain by rememberSaveable(savedCustomDomain) { mutableStateOf(savedCustomDomain) }
     var cfDomainsUrlText by rememberSaveable(savedCfDomainsUrl) { mutableStateOf(savedCfDomainsUrl) }
     var customCfDomainsText by rememberSaveable(savedCustomCfDomains) { mutableStateOf(savedCustomCfDomains) }
+    // Смена ключа при работающем прокси: движок держит старый ключ, пока его не перезапустить.
+    fun restartIfRunning() {
+        if (!isRunning) return
+        scope.launch {
+            ProxyController.stop(context)
+            kotlinx.coroutines.delay(600)
+            ProxyController.startFromSavedSettings(context)
+        }
+    }
+
     var secretKeyText by remember(savedSecretKey) { mutableStateOf(if (savedSecretKey == "LOADING") "" else savedSecretKey) }
 
     LaunchedEffect(savedSecretKey) {
@@ -170,6 +189,7 @@ fun SettingsTab(settingsStore: SettingsStore) {
             val generated = generateRandomSecret()
             secretKeyText = generated
             settingsStore.saveSecretKey(generated)
+            restartIfRunning()
         } else if (savedSecretKey != "LOADING") {
             secretKeyText = savedSecretKey
         }
@@ -412,6 +432,7 @@ fun SettingsTab(settingsStore: SettingsStore) {
                                 secretKeyText = newKey
                                 scope.launch { settingsStore.saveSecretKey(newKey) }
                                 scheduleSave()
+                                restartIfRunning()
                             },
                             enabled = !isRunning
                         ) {
@@ -422,6 +443,12 @@ fun SettingsTab(settingsStore: SettingsStore) {
                         focusedBorderColor = MaterialTheme.colorScheme.primary,
                         unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
                     )
+                )
+                Text(
+                    text = "отпечаток ключа: " + secretFingerprint(secretKeyText) +
+                           "  (в логе движка строка «Secret fp»)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 

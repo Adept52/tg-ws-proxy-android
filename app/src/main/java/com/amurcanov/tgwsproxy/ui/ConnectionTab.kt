@@ -96,9 +96,12 @@ fun ConnectionTab(settingsStore: SettingsStore) {
     }
 
     val port = savedPort.toIntOrNull() ?: 1443
+    // Пока ключ не загружен — ссылку не строим: раньше сюда уходили 32 нуля,
+    // Telegram получал нерабочий ключ, а лог забивался bad handshake.
+    val secretReady = savedSecretKey.trim().let { it.length == 32 && it != "LOADING" }
     val secretForUrl = remember(savedSecretKey) {
         val raw = savedSecretKey.trim()
-        if (raw.isNotEmpty() && raw != "LOADING") raw else "00000000000000000000000000000000"
+        if (secretReady) raw else ""
     }
     val bindIp = savedBindIp.trim().takeIf { it.isNotEmpty() } ?: "127.0.0.1"
     val proxyUrl = "https://t.me/proxy?server=$bindIp&port=$port&secret=dd$secretForUrl"
@@ -249,7 +252,7 @@ fun ConnectionTab(settingsStore: SettingsStore) {
                                     openTelegram(context, proxyUrl)
                                 }
                             },
-                            enabled = isRunning,
+                            enabled = isRunning && secretReady,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(52.dp),
@@ -293,6 +296,10 @@ fun ConnectionTab(settingsStore: SettingsStore) {
 
                         Surface(
                             onClick = {
+                                if (!secretReady) {
+                                    Toast.makeText(context, "Ключ ещё не готов, подождите секунду", Toast.LENGTH_SHORT).show()
+                                    return@Surface
+                                }
                                 val cb = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                                 cb.setPrimaryClip(android.content.ClipData.newPlainText("Proxy", proxyUrl))
                                 Toast.makeText(context, context.getString(R.string.copied), Toast.LENGTH_SHORT).show()

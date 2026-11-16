@@ -194,6 +194,15 @@ pub static DC_TEST_IPS: Lazy<HashMap<i32, &'static str>> = Lazy::new(|| {
 });
 
 // Telegram protocols & DC mapping
+/// Короткий отпечаток секрета (6 hex от SHA-256 строки) — для сверки без раскрытия ключа.
+pub fn secret_fingerprint(secret: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(secret.trim().as_bytes());
+    let digest = hasher.finalize();
+    digest.iter().take(3).map(|b| format!("{:02X}", b)).collect()
+}
+
 pub fn valid_proto(p: u32) -> bool {
     matches!(p, 0xEFEFEFEF | 0xEEEEEEEE | 0xDDDDDDDD)
 }

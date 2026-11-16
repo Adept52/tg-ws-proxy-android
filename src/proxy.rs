@@ -1556,6 +1556,14 @@ pub async fn handle_client(
 
     let current_secret = PROXY_SECRET.read().clone();
     let secret_bytes = hex::decode(&current_secret).unwrap_or_default();
+    if secret_bytes.len() != 16 {
+        // Диагностика: без валидного ключа любой клиент получит bad handshake.
+        lwarn!(
+            "[{}] SECRET NOT SET (len={}) — StartProxy получил невалидный ключ",
+            label,
+            secret_bytes.len()
+        );
+    }
 
     // PROXY protocol (proxy_config.proxy_protocol в оригинале).
     if PROXY_PROTOCOL.load(Ordering::Relaxed) {
