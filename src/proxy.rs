@@ -681,12 +681,8 @@ impl CfWorkerPool {
             domains.push(domain);
         }
         drop(exhausted);
-        // random.shuffle как в оригинале.
-        {
-            use rand::seq::SliceRandom;
-            let mut rng = rand::thread_rng();
-            domains.shuffle(&mut rng);
-        }
+        // Порядок сохраняем как задан пользователем: свои CF Worker пробуются
+        // по порядку 1→5, и только потом включается список CF-доменов.
         domains
     }
 

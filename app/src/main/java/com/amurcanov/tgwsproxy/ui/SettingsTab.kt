@@ -26,8 +26,10 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -61,6 +63,33 @@ fun openTelegram(context: Context, url: String) {
     }
 }
 
+// Кнопки работы с буфером под полем ввода: скопировать / вставить / очистить.
+@Composable
+private fun FieldActions(
+    enabled: Boolean,
+    onCopy: () -> Unit,
+    onPaste: () -> Unit,
+    onClear: () -> Unit
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+        TextButton(
+            onClick = onCopy,
+            enabled = enabled,
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+        ) { Text("копировать", style = MaterialTheme.typography.labelSmall) }
+        TextButton(
+            onClick = onPaste,
+            enabled = enabled,
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+        ) { Text("вставить", style = MaterialTheme.typography.labelSmall) }
+        TextButton(
+            onClick = onClear,
+            enabled = enabled,
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+        ) { Text("✕ очистить", style = MaterialTheme.typography.labelSmall) }
+    }
+}
+
 // Встроенный список CF-доменов (подсказка в поле). Пустое поле = использовать его же.
 private const val DEFAULT_CF_DOMAINS_URL =
     "https://raw.githubusercontent.com/Flowseal/tg-ws-proxy/main/.github/cfproxy-domains.txt"
@@ -69,6 +98,7 @@ private const val DEFAULT_CF_DOMAINS_URL =
 @Composable
 fun SettingsTab(settingsStore: SettingsStore) {
     val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     val isRunning by ProxyService.isRunning.collectAsStateWithLifecycle()
 
@@ -432,6 +462,50 @@ fun SettingsTab(settingsStore: SettingsStore) {
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
+                text = "Свои CF Worker",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = "Проверяются по порядку сверху вниз, потом — список ниже.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            for (i in 0 until 5) {
+                OutlinedTextField(
+                    value = cfWorkerAt(i),
+                    onValueChange = { setCfWorkerAt(i, it) },
+                    singleLine = true,
+                    placeholder = { Text("CF Worker ${i + 1}", style = MaterialTheme.typography.bodySmall) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    textStyle = MaterialTheme.typography.bodySmall,
+                    enabled = !isRunning,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                    )
+                )
+                FieldActions(
+                    enabled = !isRunning,
+                    onCopy = { clipboard.setText(AnnotatedString(cfWorkerAt(i))) },
+                    onPaste = {
+                        val t = clipboard.getText()?.text ?: ""
+                        setCfWorkerAt(i, t)
+                    },
+                    onClear = { setCfWorkerAt(i, "") }
+                )
+            }
+            Text(
+                text = "Домен вида name.workers.dev — без https:// и без слэша.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
                 text = "Список CF-доменов (URL)",
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.primary,
@@ -451,41 +525,25 @@ fun SettingsTab(settingsStore: SettingsStore) {
                     unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
                 )
             )
-            Text(
-                text = "Пусто — встроенный список (как раньше). Свой URL заменит его.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+            FieldActions(
+                enabled = !isRunning,
+                onCopy = { clipboard.setText(AnnotatedString(cfDomainsUrlText)) },
+                onPaste = { cfDomainsUrlText = clipboard.getText()?.text ?: ""; scheduleSave() },
+                onClear = { cfDomainsUrlText = ""; scheduleSave() }
             )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = "Свои CF Worker (1–5)",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.SemiBold
-            )
-            for (i in 0 until 5) {
-                OutlinedTextField(
-                    value = cfWorkerAt(i),
-                    onValueChange = { setCfWorkerAt(i, it) },
-                    singleLine = true,
-                    placeholder = { Text("CF Worker ${i + 1}", style = MaterialTheme.typography.bodySmall) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
-                    textStyle = MaterialTheme.typography.bodySmall,
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(
+                    onClick = { cfDomainsUrlText = ""; scheduleSave() },
                     enabled = !isRunning,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                    )
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                ) { Text("по умолчанию", style = MaterialTheme.typography.labelSmall) }
+                Text(
+                    text = if (cfDomainsUrlText.isBlank()) "сейчас: встроенный список"
+                           else "сейчас: свой список вместо встроенного",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Text(
-                text = "Домен вида name.workers.dev — без https:// и без слэша.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
 
