@@ -129,6 +129,21 @@ pub static CFPROXY_429: Lazy<RwLock<HashMap<String, Cfproxy429State>>> =
 pub const CFPROXY_DOMAINS_URL: &str =
     "https://raw.githubusercontent.com/Flowseal/tg-ws-proxy/main/.github/cfproxy-domains.txt";
 
+// Переопределение URL списка CF-доменов из настроек приложения.
+// Пустая строка = использовать встроенный адрес выше (поведение по умолчанию).
+pub static CFPROXY_DOMAINS_URL_OVERRIDE: Lazy<RwLock<String>> =
+    Lazy::new(|| RwLock::new(String::new()));
+
+/// Действующий URL списка CF-доменов: заданный пользователем, иначе встроенный.
+pub fn cfproxy_domains_url() -> String {
+    let custom = CFPROXY_DOMAINS_URL_OVERRIDE.read().trim().to_string();
+    if custom.is_empty() {
+        CFPROXY_DOMAINS_URL.to_string()
+    } else {
+        custom
+    }
+}
+
 // MTProto proxy secret
 pub static PROXY_SECRET: Lazy<RwLock<String>> =
     Lazy::new(|| RwLock::new("00000000000000000000000000000000".to_string()));

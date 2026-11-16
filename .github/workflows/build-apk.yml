@@ -1,0 +1,59 @@
+name: Build APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Rust + Android targets
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi
+
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: NDK r27
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27c
+
+      - name: cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      - name: Build native library
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+          ANDROID_NDK_ROOT: ${{ steps.ndk.outputs.ndk-path }}
+        run: |
+          cargo ndk -t arm64-v8a -t armeabi-v7a -o app/src/main/jniLibs build --release
+          find app/src/main/jniLibs -name '*.so' -exec ls -lh {} \;
+
+      - name: Build APKs
+        run: |
+          java -cp gradle/wrapper/gradle-wrapper.jar org.gradle.wrapper.GradleWrapperMain \
+            --no-daemon assembleUniversalRelease assembleArm64Release assembleArm32Release
+
+      - name: Collect APKs
+        run: |
+          mkdir -p out
+          find app/build/outputs/apk -name '*.apk' -exec cp {} out/ \;
+          ls -lh out/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tgws-apk
+          path: out/*.apk

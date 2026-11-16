@@ -240,6 +240,28 @@ pub unsafe extern "C" fn SetCfProxyConfig(
     }
 }
 
+/// Задать свой URL списка CF-доменов (из настроек приложения).
+/// Пустая строка или null — вернуть встроенный адрес по умолчанию.
+///
+/// # Safety
+/// `c_url` — валидная C-строка или null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn SetCfProxyDomainsUrl(c_url: *const c_char) {
+    let url = cstr_to_string(c_url);
+    let url = url.trim().to_string();
+    // Принимаем только http(s): опечатка в схеме не должна ломать загрузку списка.
+    if !url.is_empty() && !url.starts_with("http://") && !url.starts_with("https://") {
+        lwarn!(" CF: URL списка отклонён (нужен http/https): {}", url);
+        return;
+    }
+    *CFPROXY_DOMAINS_URL_OVERRIDE.write() = url.clone();
+    if url.is_empty() {
+        linfo!(" CF: URL списка сброшен на встроенный");
+    } else {
+        linfo!(" CF: URL списка задан пользователем: {}", url);
+    }
+}
+
 /// # Safety
 /// `c_domains` — валидная C-строка или null (--cfproxy-worker-domain, repeatable).
 #[unsafe(no_mangle)]

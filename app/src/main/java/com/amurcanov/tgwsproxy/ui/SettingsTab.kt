@@ -61,6 +61,10 @@ fun openTelegram(context: Context, url: String) {
     }
 }
 
+// Встроенный список CF-доменов (подсказка в поле). Пустое поле = использовать его же.
+private const val DEFAULT_CF_DOMAINS_URL =
+    "https://raw.githubusercontent.com/Flowseal/tg-ws-proxy/main/.github/cfproxy-domains.txt"
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsTab(settingsStore: SettingsStore) {
@@ -90,6 +94,8 @@ fun SettingsTab(settingsStore: SettingsStore) {
     val savedCfEnabled by settingsStore.cfproxyEnabled.collectAsStateWithLifecycle(initialValue = true)
     val savedCustomDomainEnabled by settingsStore.customCfDomainEnabled.collectAsStateWithLifecycle(initialValue = false)
     val savedCustomDomain by settingsStore.customCfDomain.collectAsStateWithLifecycle(initialValue = "")
+    val savedCfDomainsUrl by settingsStore.cfDomainsUrl.collectAsStateWithLifecycle(initialValue = "")
+    val savedCustomCfDomains by settingsStore.customCfDomains.collectAsStateWithLifecycle(initialValue = "")
     val autoStartOnBoot by settingsStore.autoStartOnBoot.collectAsStateWithLifecycle(initialValue = false)
     val savedSecretKey by settingsStore.secretKey.collectAsStateWithLifecycle(initialValue = "LOADING")
 
@@ -125,6 +131,8 @@ fun SettingsTab(settingsStore: SettingsStore) {
     var cfEnabled by rememberSaveable(savedCfEnabled) { mutableStateOf(savedCfEnabled) }
     var customCfDomainEnabled by rememberSaveable(savedCustomDomainEnabled) { mutableStateOf(savedCustomDomainEnabled) }
     var customCfDomain by rememberSaveable(savedCustomDomain) { mutableStateOf(savedCustomDomain) }
+    var cfDomainsUrlText by rememberSaveable(savedCfDomainsUrl) { mutableStateOf(savedCfDomainsUrl) }
+    var customCfDomainsText by rememberSaveable(savedCustomCfDomains) { mutableStateOf(savedCustomCfDomains) }
     var secretKeyText by remember(savedSecretKey) { mutableStateOf(if (savedSecretKey == "LOADING") "" else savedSecretKey) }
 
     LaunchedEffect(savedSecretKey) {
@@ -147,13 +155,25 @@ fun SettingsTab(settingsStore: SettingsStore) {
                 isDcAuto, dc1Text, dc2Text, dc3Text, dc4Text, dc5Text, dc203Text,
                 dc1mText, dc2mText, dc3mText, dc4mText, dc5mText, dc203mText,
                 experimentalMode, bindIpText, portText, selectedPoolSize,
-                cfEnabled, customCfDomainEnabled, customCfDomain, secretKeyText
+                cfEnabled, customCfDomainEnabled, customCfDomain, secretKeyText,
+                cfDomainsUrlText, customCfDomainsText
             )
         }
     }
 
     var showIpSetupDialog by rememberSaveable { mutableStateOf(false) }
     val scrollState = rememberScrollState()
+
+    // До 5 своих CF Worker: храним через запятую, показываем отдельными полями
+    fun cfWorkerAt(i: Int): String =
+        customCfDomainsText.split(",").map { it.trim() }.getOrElse(i) { "" }
+    fun setCfWorkerAt(i: Int, v: String) {
+        val cur = customCfDomainsText.split(",").map { it.trim() }.toMutableList()
+        while (cur.size < 5) cur.add("")
+        cur[i] = v.trim().removePrefix("https://").removePrefix("http://").trimEnd('/')
+        customCfDomainsText = cur.take(5).joinToString(",")
+        scheduleSave()
+    }
 
     if (showIpSetupDialog) {
         IpSetupDialog(
@@ -408,6 +428,64 @@ fun SettingsTab(settingsStore: SettingsStore) {
                     enabled = !isRunning
                 )
             }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "Список CF-доменов (URL)",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold
+            )
+            OutlinedTextField(
+                value = cfDomainsUrlText,
+                onValueChange = { cfDomainsUrlText = it; scheduleSave() },
+                singleLine = true,
+                placeholder = { Text(DEFAULT_CF_DOMAINS_URL, style = MaterialTheme.typography.bodySmall) },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                textStyle = MaterialTheme.typography.bodySmall,
+                enabled = !isRunning,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                )
+            )
+            Text(
+                text = "Пусто — встроенный список (как раньше). Свой URL заменит его.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "Свои CF Worker (1–5)",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold
+            )
+            for (i in 0 until 5) {
+                OutlinedTextField(
+                    value = cfWorkerAt(i),
+                    onValueChange = { setCfWorkerAt(i, it) },
+                    singleLine = true,
+                    placeholder = { Text("CF Worker ${i + 1}", style = MaterialTheme.typography.bodySmall) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    textStyle = MaterialTheme.typography.bodySmall,
+                    enabled = !isRunning,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                    )
+                )
+            }
+            Text(
+                text = "Домен вида name.workers.dev — без https:// и без слэша.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
 

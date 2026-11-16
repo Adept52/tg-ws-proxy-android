@@ -345,7 +345,7 @@ pub async fn try_refresh_cfproxy_domains() -> bool {
             .map(|_| rng.gen_range(b'a'..=b'z') as char)
             .collect()
     };
-    let url = format!("{}?{}", CFPROXY_DOMAINS_URL, nonce);
+    let url = format!("{}?{}", cfproxy_domains_url(), nonce);
     let resp = match client
         .get(&url)
         .header("User-Agent", "tg-ws-proxy")

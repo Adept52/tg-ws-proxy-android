@@ -41,6 +41,8 @@ class ProxyService : Service() {
     private var lastCfEnabled: Boolean = true
     private var lastCfPriority: Boolean = true
     private var lastCfDomain: String = ""
+    private var lastCfDomainsUrl: String = ""
+    private var lastCustomCfDomains: String = ""
     private var lastSecretKey: String = ""
 
     companion object {
@@ -54,6 +56,8 @@ class ProxyService : Service() {
         const val EXTRA_CFPROXY_ENABLED = "EXTRA_CFPROXY_ENABLED"
         const val EXTRA_CFPROXY_PRIORITY = "EXTRA_CFPROXY_PRIORITY"
         const val EXTRA_CFPROXY_DOMAIN = "EXTRA_CFPROXY_DOMAIN"
+        const val EXTRA_CF_DOMAINS_URL = "EXTRA_CF_DOMAINS_URL"
+        const val EXTRA_CUSTOM_CF_DOMAINS = "EXTRA_CUSTOM_CF_DOMAINS"
         const val EXTRA_SECRET_KEY = "EXTRA_SECRET_KEY"
         
         private const val NOTIFICATION_ID = 101
@@ -91,8 +95,11 @@ class ProxyService : Service() {
                 val cfEnabled = intent.getBooleanExtra(EXTRA_CFPROXY_ENABLED, true)
                 val cfPriority = intent.getBooleanExtra(EXTRA_CFPROXY_PRIORITY, true)
                 val cfDomain = intent.getStringExtra(EXTRA_CFPROXY_DOMAIN) ?: ""
+                val cfDomainsUrl = intent.getStringExtra(EXTRA_CF_DOMAINS_URL) ?: ""
+                val customCfDomains = intent.getStringExtra(EXTRA_CUSTOM_CF_DOMAINS) ?: ""
                 val secretKey = intent.getStringExtra(EXTRA_SECRET_KEY) ?: ""
-                startProxy(bindIp, port, ips, poolSize, cfEnabled, cfPriority, cfDomain, secretKey)
+                startProxy(bindIp, port, ips, poolSize, cfEnabled, cfPriority, cfDomain, secretKey,
+                    cfDomainsUrl, customCfDomains)
             }
             ACTION_STOP -> {
                 stopProxy()
@@ -105,7 +112,8 @@ class ProxyService : Service() {
                 // If we had saved params, try to restart
                 if (lastPort > 0 && lastSecretKey.isNotEmpty()) {
                     Log.w(TAG, "Service restarted by system, re-starting proxy")
-                    startProxy(lastBindIp, lastPort, lastIps, lastPoolSize, lastCfEnabled, lastCfPriority, lastCfDomain, lastSecretKey)
+                    startProxy(lastBindIp, lastPort, lastIps, lastPoolSize, lastCfEnabled, lastCfPriority, lastCfDomain, lastSecretKey,
+                        lastCfDomainsUrl, lastCustomCfDomains)
                 } else {
                     stopSelf()
                 }
@@ -132,7 +140,8 @@ class ProxyService : Service() {
 
     private fun startProxy(bindIp: String, port: Int, ips: String, poolSize: Int = 4,
                            cfEnabled: Boolean = true, cfPriority: Boolean = true,
-                           cfDomain: String = "", secretKey: String = "") {
+                           cfDomain: String = "", secretKey: String = "",
+                           cfDomainsUrl: String = "", customCfDomains: String = "") {
         if (_isRunning.value || stopInProgress) return
         _isVerifiedRunning.value = false
 
@@ -144,6 +153,8 @@ class ProxyService : Service() {
         lastCfEnabled = cfEnabled
         lastCfPriority = cfPriority
         lastCfDomain = cfDomain
+        lastCfDomainsUrl = cfDomainsUrl
+        lastCustomCfDomains = customCfDomains
         lastSecretKey = secretKey
         notificationStartedAtMs = System.currentTimeMillis()
         lastNotificationContent = getString(R.string.notification_starting)
@@ -180,6 +191,12 @@ class ProxyService : Service() {
                 NativeProxy.setPoolSize(poolSize)
                 NativeProxy.setCfProxyCacheDir(cacheDir.absolutePath)
                 NativeProxy.setCfProxyConfig(cfEnabled, cfPriority, cfDomain)
+                // Свой URL списка CF-доменов (пусто = встроенный адрес)
+                NativeProxy.setCfProxyDomainsUrl(cfDomainsUrl.trim())
+                // Свой список CF Worker (до 5 доменов через запятую)
+                if (customCfDomains.isNotBlank()) {
+                    NativeProxy.setCfWorkerDomains(customCfDomains.trim())
+                }
                 val result = NativeProxy.startProxy(bindIp, port, ips, secretKey, 1)
                 if (result == 0) {
                     serviceScope.launch {
@@ -288,7 +305,9 @@ class ProxyService : Service() {
                 cfEnabled = lastCfEnabled,
                 cfPriority = lastCfPriority,
                 cfDomain = lastCfDomain,
-                secretKey = lastSecretKey
+                secretKey = lastSecretKey,
+                cfDomainsUrl = lastCfDomainsUrl,
+                customCfDomains = lastCustomCfDomains
             )
         }
     }
