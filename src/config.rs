@@ -295,11 +295,42 @@ pub fn normalize_domain_pool(domains: &[String]) -> Vec<String> {
 }
 
 /// proxy/config.py::coerce_domain_list — строка или список через , ; пробелы.
+/// Похоже ли значение на имя хоста: отбрасываем слова, куски фраз и ссылки с путём.
+fn normalize_hostname(item: &str) -> Option<String> {
+    let host = item.trim();
+    let host = host
+        .strip_prefix("https://")
+        .or_else(|| host.strip_prefix("http://"))
+        .unwrap_or(host);
+    let host = match host.find('/') {
+        Some(i) => &host[..i],
+        None => host,
+    };
+    let host = host.trim_end_matches('.').trim();
+    if host.is_empty() || host.len() > 253 || !host.contains('.') || host.contains("..") {
+        return None;
+    }
+    if host.starts_with('.') || host.starts_with('-') || host.ends_with('-') {
+        return None;
+    }
+    if !host
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '.')
+    {
+        return None;
+    }
+    Some(host.to_string())
+}
+
 pub fn coerce_domain_list_str(value: &str) -> Vec<String> {
     let mut seen = std::collections::HashSet::new();
     let mut result = Vec::new();
     for item in value.replace(',', " ").replace(';', " ").split_whitespace() {
-        let item = item.trim();
+        let item = match normalize_hostname(item) {
+            Some(h) => h,
+            None => continue,
+        };
+        let item = item.as_str();
         if item.is_empty() {
             continue;
         }

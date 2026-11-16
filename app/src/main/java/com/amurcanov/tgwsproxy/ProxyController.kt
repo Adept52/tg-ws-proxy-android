@@ -6,6 +6,9 @@ import android.widget.Toast
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.flow.first
 
+private val HOSTNAME_RE =
+    Regex("""^(?=.{4,253}$)([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$""")
+
 object ProxyController {
 
     suspend fun startFromSavedSettings(
@@ -32,7 +35,13 @@ object ProxyController {
         val customCfDomainEnabled = settingsStore.customCfDomainEnabled.first()
         val customCfDomain = settingsStore.customCfDomain.first().trim()
         val cfDomainsUrl = settingsStore.cfDomainsUrl.first().trim()
+        // Оставляем только то, что похоже на домен: слова из вставленного текста отсекаются.
         val customCfDomains = settingsStore.customCfDomains.first().trim()
+            .split(",")
+            .map { it.trim() }
+            .filter { HOSTNAME_RE.matches(it) }
+            .distinct()
+            .joinToString(",")
         val secretKey = ensureSecretKey(settingsStore)
 
         val parsedIps = buildList {
