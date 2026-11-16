@@ -22,8 +22,14 @@ jobs:
         with:
           targets: aarch64-linux-android,armv7-linux-androideabi
 
-      - name: Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Android SDK packages
+        run: |
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "SDK: $SDK"
+          SDKM=$(find "$SDK/cmdline-tools" -maxdepth 3 -name sdkmanager -type f | head -1)
+          echo "sdkmanager: $SDKM"
+          yes | "$SDKM" --licenses > /dev/null 2>&1 || true
+          "$SDKM" "platforms;android-35" "build-tools;35.0.0" "platform-tools" 2>&1 | tail -5
 
       - name: NDK r27
         id: ndk
